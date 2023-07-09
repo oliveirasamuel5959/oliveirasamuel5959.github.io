@@ -4,32 +4,41 @@
 
 {% block main %}
 
-    <table class="table">
+    <div class="container">
+        <h4>{{ username }}</h4>
+    </div>
+
+    <table class="table table-striped">
         <thead>
             <tr>
-                <th scope="col">Symbol</th>
-                <th scope="col">Name</th>
-                <th scope="col">Shares</th>
-                <th scope="col">Price</th>
-                <th scope="col">Total</th>
+                <th class="text-start">Symbol</th>
+                <th scope="text-start">Name</th>
+                <th scope="text-end">Shares</th>
+                <th scope="text-end">Price</th>
+                <th scope="text-end">Total</th>
             </tr>
         </thead>
         <tbody>
-            <tr>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td>Cash</td>
-                <td>{{ cash }}</td>
-            </tr>
-            <tr>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td>TOTAL</td>
-                <td>{{ total_cash }}</td>
-            </tr>
+            {% for data in portifolio%}
+                <tr>
+                    <td class="text-start">{{ data[2] }}</td>
+                    <td class="text-start">{{ data[1] }}</td>
+                    <td class="text-end">{{ data[3] }}</td>
+                    <td class="text-end">$ {{ data[4] }}</td>
+                    <td class="text-end">$ {{ data[5] }}</td>
+                </tr>
+            {% endfor %}
         </tbody>
+        <tfoot>
+            <tr>
+                <td class="border-0 fw-bold text-end" colspan="4">Cash</td>
+                <td class="border-0 text-end">{{ cash }}</td>
+            </tr>
+            <tr>
+                <td class="border-0 fw-bold text-end" colspan="4">TOTAL</td>
+                <td class="border-0 w-bold text-end">{{ total_cash }}</td>
+            </tr>
+        </tfoot>
     </table>
 
 {% endblock %}

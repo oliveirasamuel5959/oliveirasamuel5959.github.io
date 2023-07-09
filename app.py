@@ -56,8 +56,22 @@ def after_request(response):
 def index():
     """Show portfolio of stocks"""
     db.execute("SELECT * FROM users WHERE id = %s", (session["user_id"],))
-    row = db.fetchall()
-    return render_template("index.html", username = row[0][1], cash=usd(10000), total_cash=usd(10000) )
+    row_users = db.fetchall()
+
+    """ Select the portifolio content of the user current log-in """
+    db.execute("SELECT * FROM portifolio WHERE username = %s", (session["user_name"],))
+    row_portifolio = db.fetchall()
+
+    """ Sum the user total value invested """
+    db.execute("SELECT SUM(Total) FROM portifolio WHERE username = %s", (session["user_name"],))
+    row_sum = db.fetchall()
+    
+    return render_template(
+            "index.html", 
+            portifolio=row_portifolio, 
+            total_cash=usd(row_sum[0][0]), 
+            username=session["user_name"],
+            cash= usd(row_users[0][3]))
 
 
 @app.route("/cash", methods=["GET", "POST"])
@@ -69,7 +83,12 @@ def add_cash():
         if not cash_value:
             return apology("Enter a value", 403)
         
-        db.execute("UPDATE users SET cash = (%s) WHERE id = (%s)", (cash_value, session["user_id"]))
+        db.execute("SELECT * FROM users WHERE id = (%s)", (session["user_id"],))
+        row_users = db.fetchall()
+
+        sum_cash = int(cash_value) + row_users[0][3]
+
+        db.execute("UPDATE users SET cash = (%s) WHERE id = (%s)", (sum_cash, session["user_id"]))
         conn.commit()
 
         return redirect("/")
@@ -96,13 +115,28 @@ def buy():
         if not stock_symbol:
             return apology("You need to enter a symbol", 403)
         if num_shares <= 0:
-            return apology("Minimum share you can by is one", 403)
+            return apology("Minimum share you can buy is one", 403)
 
         stock = lookup(stock_symbol)
         print("returned", stock)
         if stock is None:
             return apology("The stock symbol do not exist", 403)
         
+        db.execute("SELECT * FROM users WHERE id = (%s)", (session["user_id"],) )
+        row_users = db.fetchall()
+
+        total = num_shares*stock['price']
+
+        if total >= row_users[0][3]:
+            return apology("You don't have enough money!", 403)
+        else:
+            price_payed = row_users[0][3] - num_shares*stock['price']
+            db.execute("UPDATE users SET cash = (%s) WHERE id = (%s)", (price_payed, session["user_id"]))
+            sql_insert = "INSERT INTO portifolio (Username, companyName, Symbol, shareQtd, sharePrice, Total) VALUES (%s, %s, %s, %s, %s, %s)"
+            sql_values = (row_users[0][1], stock['name'], stock['symbol'], num_shares, stock['price'], total)
+            db.execute(sql_insert, sql_values)
+            conn.commit()
+
         return redirect("/")
         
     else:
@@ -147,6 +181,7 @@ def login():
 
         # Remember which user has logged in
         session["user_id"] = rows[0][0]
+        session["user_name"] = rows[0][1]
 
         # Redirect user to home page
         return redirect("/")
@@ -237,7 +272,48 @@ def register():
 @login_required
 def sell():
     """Sell shares of stock"""
-    return apology("TODO")
+    user_shares = {}
+    """ return the user row from portifolio table """
+    db.execute("SELECT * FROM portifolio WHERE Username = %s", (session["user_name"],))
+    row_portifolio = db.fetchall()
+
+    if request.method == "POST":
+
+        """ Check for user correct symbol input """
+        if not request.form.get("symbol"):
+            return apology("You need to enter a symbol", 403)
+        
+        """ Check for user correct shares input """
+        if not request.form.get("shares"):
+            return apology("Minimum share you can sell is one", 403)
+
+        """ return the user row from users table """
+        db.execute("SELECT * FROM users WHERE id = %s", (session["user_id"],))
+        row_users = db.fetchall()
+
+        """ return the user row from portifolio table """
+        db.execute("SELECT * FROM portifolio WHERE Username = %s", (session["user_name"],))
+        row_portifolio = db.fetchall()
+
+        """ Sum user total shares from the specific company """
+        db.execute("SELECT SUM(shareQtd) FROM portifolio WHERE Username = %s AND Symbol = %s", (session["user_name"], request.form.get("symbol").upper()))
+        row_sum = db.fetchall()
+        for data in row_portifolio:
+            for content in data:
+                if request.form.get("symbol").upper() == content:
+                    user_shares[content] = int(row_sum[0][0])
+        
+        """ check if the share exists on user portifolio table """
+        if request.form.get("symbol").upper() not in user_shares.keys():
+            return apology("You do not own this share", 403)
+        
+        print(user_shares)
+        """ check if user has minimum shares to sell """
+        if int(request.form.get("shares")) > user_shares[request.form.get("symbol").upper()]:
+            return apology("You do not have enough share to sell", 403)
+
+    else:
+        return render_template("sell.html", shares=row_portifolio)
 
 
 if __name__ == '__main__':
